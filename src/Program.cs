@@ -1,4 +1,5 @@
-﻿using System.Net.Http.Headers;
+﻿using LoadVIS.Database;
+using System.Net.Http.Headers;
 using System.Text.Json;
 
 namespace LoadVIS
@@ -9,38 +10,71 @@ namespace LoadVIS
 
         static async Task Main(string[] args)
         {
+            PtsAccionesContext dbContext = new PtsAccionesContext();
+
+            await dbContext.Database.BeginTransactionAsync();
+
             try
             {
                 var visitas = await ObtenerVisitas();
 
                 if (visitas != null && visitas.Any())
                 {
-                    var personasMorales = new List<PersonaMoral>();
+                    var personasMoralesNotFound = new List<Visita>();
 
                     foreach (var visita in visitas)
                     {
                         var persona = await ObtenerPersonaMoral(visita.ClavePes, visita.IdSector);
                         if (persona != null && persona.Any())
                         {
-                            personasMorales.AddRange(persona);
+                            ////personasMorales.AddRange(persona);
+                            var firstPersona = persona.First();
+
+                            AccionSupervision nuevaAccion = new AccionSupervision
+                            {
+                                IdEntidadExt = visita.ClavePes,
+                                ClavePes = visita.ClavePes,
+                                Casfim = "",
+                                DenominacionEntidad = firstPersona.RazonSocial,
+                                NombreCortoEntidad = firstPersona.NombreCorto,
+                                IdSectorExt = firstPersona.SectorId,
+                                NombreSector = firstPersona.Sector,
+                                IdSubsectorExt = firstPersona.SubSectorId,
+                                NombreSubsector = firstPersona.SubSector,
+                                IdVpExt = firstPersona.VicepresidenciaId,
+                                NombreVp = firstPersona.Vicepresidencia,
+                                IdDgExt = firstPersona.DireccionGeneralId,
+                                NombreDg = firstPersona.DireccionGeneral,
+                                IdTipoAccion = 1,
+                                //// TODO: CeferRegistro
+                                //// TODO: CeferPeriodo
+                                FechaInicioPlan = visita.FechaInicio,
+                                FechaFinPlan = visita.FechaFin,
+                                FechaAlta = DateTime.Now,
+                                UsuarioAlta = "ID004478",
+                                IdAccion = visita.Id,
+                                Habilitado = true,
+                                Terminado = false,
+                                IdEstado = 1
+                            };
+                        }
+                        else
+                        {
+                            personasMoralesNotFound.Add(visita);
                         }
                     }
 
                     Console.WriteLine($"Se procesaron {visitas.Count} visitas");
                     Console.WriteLine($"Se encontraron {personasMorales.Count} personas morales");
-
-                    // Mostrar ejemplo del primer resultado
-                    if (personasMorales.Any())
-                    {
-                        Console.WriteLine("\nPrimer resultado:");
-                        var json = JsonSerializer.Serialize(personasMorales.First(), new JsonSerializerOptions { WriteIndented = true });
-                        Console.WriteLine(json);
-                    }
                 }
+
+                await dbContext.SaveChangesAsync();
+                await dbContext.Database.CommitTransactionAsync();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error: {ex.Message}");
+                await dbContext.Database.RollbackTransactionAsync();
             }
         }
 
