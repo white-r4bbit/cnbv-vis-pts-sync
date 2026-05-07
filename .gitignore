@@ -56,3 +56,4 @@ CodeCoverage/
 TestResult.xml
 nunit-*.xml
 /src/.vs/LoadVIS.slnx
+/src/.vs/ProjectEvaluation
