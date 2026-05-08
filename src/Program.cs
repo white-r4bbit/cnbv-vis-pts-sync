@@ -192,7 +192,9 @@ namespace LoadVIS
 
         static async Task<string> ObtenerCasfim(int personaMoralId, int subSectorId)
         {
-            var url = $"https://localhost:7001/api/v1/claves-dinamicas/valor?personaMoralId={personaMoralId}&subSectorId={subSectorId}";
+            // clavesDinamicasId siempre es 2
+            const int clavesDinamicasId = 2;
+            var url = $"https://localhost:7001/api/v1/claves-dinamicas/valor?personaMoralId={personaMoralId}&subSectorId={subSectorId}&clavesDinamicasId={clavesDinamicasId}";
 
             try
             {
@@ -200,12 +202,15 @@ namespace LoadVIS
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<CasfimResponse>(json, new JsonSerializerOptions
+
+                // Deserializar como lista de ClaveDinamicaResponse
+                var resultados = JsonSerializer.Deserialize<List<ClaveDinamicaResponse>>(json, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true
                 });
 
-                var casfim = result?.Casfim ?? string.Empty;
+                // Obtener el valor del primer resultado (si existe)
+                var casfim = resultados?.FirstOrDefault()?.Valor ?? string.Empty;
 
                 // Validar que el valor no sea nulo o vacío
                 if (string.IsNullOrEmpty(casfim))
@@ -309,6 +314,12 @@ namespace LoadVIS
 
             return string.Concat(clave);
         }
+    }
+
+    public class ClaveDinamicaResponse
+    {
+        public int ClaveDinamicaId { get; set; }
+        public string Valor { get; set; } = string.Empty;
     }
 
     // Clases para mapear las respuestas
