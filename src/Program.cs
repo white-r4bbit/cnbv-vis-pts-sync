@@ -50,7 +50,7 @@ namespace LoadVIS
                             {
                                 IdEntidadExt = visita.ClavePes,
                                 ClavePes = visita.ClavePes.ToString(),
-                                Casfim = casfim ?? casfim,
+                                Casfim = casfim ?? string.Empty,
                                 DenominacionEntidad = firstPersona.RazonSocial,
                                 NombreCortoEntidad = firstPersona.NombreCorto,
                                 IdSectorExt = firstPersona.SectorId,
@@ -59,12 +59,12 @@ namespace LoadVIS
                                 NombreSubsector = firstPersona.SubSector,
                                 IdVpExt = firstPersona.VicepresidenciaId,
                                 NombreVp = firstPersona.Vicepresidencia,
+                                ClaveVp = GenerarClave(firstPersona.Vicepresidencia),
                                 IdDgExt = firstPersona.DireccionGeneralId,
                                 NombreDg = firstPersona.DireccionGeneral,
-                                IdTipoAccion = 1,
-                                //// TODO: CeferRegistro
+                                ClaveDg = GenerarClave(firstPersona.DireccionGeneral),
+                                IdTipoAccion = visita.Tipo.Equals("Ordinaria") ? 1 : 2,
                                 CeferRegistro = cefer != null ? cefer.Calificacion : null,
-                                //// TODO: CeferPeriodo
                                 CeferPeriodo = cefer != null ? cefer.Periodo : null,
                                 FechaInicioPlan = visita.FechaInicio,
                                 FechaFinPlan = visita.FechaFin,
@@ -273,6 +273,41 @@ namespace LoadVIS
                 Console.WriteLine($"Error al obtener kardex (CASFIM: {casfim}): {ex.Message}");
                 return new List<Kardex>();
             }
+        }
+
+        static string GenerarClave(string texto)
+        {
+            if (string.IsNullOrWhiteSpace(texto))
+                return string.Empty;
+
+            // Palabras a omitir (solo cuando están en medio)
+            var palabrasAOmitir = new HashSet<string> { "DE", "Y", "E", "DEL", "LA", "LAS", "LOS", "EL" };
+
+            // Dividir el texto por espacios
+            var palabras = texto.Trim().Split(new[] { ' ', '-', '_', '.' }, StringSplitOptions.RemoveEmptyEntries);
+
+            var clave = new List<string>();
+            int totalPalabras = palabras.Length;
+
+            for (int i = 0; i < totalPalabras; i++)
+            {
+                var palabra = palabras[i].ToUpper();
+
+                // Si es la última palabra, incluirla siempre
+                if (i == totalPalabras - 1)
+                {
+                    if (!string.IsNullOrEmpty(palabra))
+                        clave.Add(char.ToUpper(palabras[i][0]).ToString());
+                }
+                // Si no es la última palabra, omitir si está en la lista de palabras a omitir
+                else if (!palabrasAOmitir.Contains(palabra))
+                {
+                    if (!string.IsNullOrEmpty(palabra))
+                        clave.Add(char.ToUpper(palabras[i][0]).ToString());
+                }
+            }
+
+            return string.Concat(clave);
         }
     }
 
