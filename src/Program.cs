@@ -1,4 +1,5 @@
 ﻿using LoadVIS.Database;
+using System.ComponentModel;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -17,6 +18,7 @@ namespace LoadVIS
             try
             {
                 var visitas = await ObtenerVisitas();
+                var loadedVisitas = dbContext.AccionSupervisions.ToList().Select(v => v.IdAccion);
                 var personasMoralesNotFound = new List<Visita>();
 
                 if (visitas != null && visitas.Any())
@@ -27,100 +29,107 @@ namespace LoadVIS
 
                     foreach (var visita in visitas)
                     {
-                        Console.WriteLine($"{index}.- {visita.Id}");
-
-                        var persona = await ObtenerPersonaMoral(visita.ClavePes, visita.IdSector);
-                        if (persona != null && persona.Any())
+                        Console.WriteLine($"{index} de {visitas.Count}.- {visita.Id}");
+                        if (!loadedVisitas.Contains(visita.Id))
                         {
-                            ////personasMorales.AddRange(persona);
-                            var firstPersona = persona.First();
-
-                            string casfim = await ObtenerCasfim(visita.ClavePes, firstPersona.SubSectorId);
-
-                            List<Kardex> kardexList = new List<Kardex>();
-
-                            if (!string.IsNullOrEmpty(casfim))
+                            var persona = await ObtenerPersonaMoral(visita.ClavePes, visita.IdSector);
+                            if (persona != null && persona.Any())
                             {
-                                kardexList = await ObtenerKardex(casfim);
+                                ////personasMorales.AddRange(persona);
+                                var firstPersona = persona.First();
+
+                                string casfim = await ObtenerCasfim(visita.ClavePes, firstPersona.SubSectorId);
+                                var dgInfo = await ObtenerAreaPorNombre(firstPersona.DireccionGeneral.Trim());
+                                var vpInfo = await ObtenerAreaPorNombre(firstPersona.Vicepresidencia.Trim());
+
+                                List<Kardex> kardexList = new List<Kardex>();
+
+                                if (!string.IsNullOrEmpty(casfim))
+                                {
+                                    kardexList = await ObtenerKardex(casfim);
+                                }
+
+                                Kardex cefer = kardexList.LastOrDefault();
+
+                                AccionSupervision nuevaAccion = new AccionSupervision
+                                {
+                                    IdEntidadExt = visita.ClavePes,
+                                    ClavePes = visita.ClavePes.ToString(),
+                                    Casfim = casfim ?? string.Empty,
+                                    DenominacionEntidad = firstPersona.RazonSocial,
+                                    NombreCortoEntidad = firstPersona.NombreCorto,
+                                    IdSectorExt = firstPersona.SectorId,
+                                    NombreSector = firstPersona.Sector,
+                                    IdSubsectorExt = firstPersona.SubSectorId,
+                                    NombreSubsector = firstPersona.SubSector,
+                                    IdVpExt = vpInfo != null ? vpInfo.Id : 0,
+                                    NombreVp = firstPersona.Vicepresidencia,
+                                    ClaveVp = GenerarClave(firstPersona.Vicepresidencia),
+                                    IdDgExt = dgInfo != null ? dgInfo.Id : 0,
+                                    NombreDg = firstPersona.DireccionGeneral,
+                                    ClaveDg = GenerarClave(firstPersona.DireccionGeneral),
+                                    IdTipoAccion = visita.Tipo.Equals("Ordinaria") ? 1 : 2,
+                                    CeferRegistro = cefer != null ? cefer.Calificacion : null,
+                                    CeferPeriodo = cefer != null ? cefer.Periodo : null,
+                                    FechaInicioPlan = visita.FechaInicio,
+                                    FechaFinPlan = visita.FechaFin,
+                                    FechaAlta = DateTime.Now,
+                                    UsuarioAlta = "ID004478",
+                                    IdAccion = visita.Id,
+                                    Habilitado = true,
+                                    Terminado = false,
+                                    IdEstado = 1
+                                };
+
+                                await dbContext.AccionSupervisions.AddAsync(nuevaAccion);
+                                await dbContext.SaveChangesAsync();
+
+                                EjecucionAccion nuevaEjecucion = new EjecucionAccion
+                                {
+                                    IdAccion = nuevaAccion.IdAccion
+                                };
+
+                                await dbContext.EjecucionAccions.AddAsync(nuevaEjecucion);
+                                await dbContext.SaveChangesAsync();
+
+                                ObservacionRecomendacion nuevaObservacion = new ObservacionRecomendacion
+                                {
+                                    IdAccion = nuevaAccion.IdAccion
+                                };
+
+                                await dbContext.ObservacionRecomendacions.AddAsync(nuevaObservacion);
+                                await dbContext.SaveChangesAsync();
+
+                                AccionMedidaCorrectiva nuevaMedida = new AccionMedidaCorrectiva
+                                {
+                                    IdAccion = nuevaAccion.IdAccion
+                                };
+
+                                await dbContext.AccionMedidaCorrectivas.AddAsync(nuevaMedida);
+                                await dbContext.SaveChangesAsync();
+
+                                SancionControl nuevaSancion = new SancionControl
+                                {
+                                    IdAccion = nuevaAccion.IdAccion
+                                };
+
+                                await dbContext.SancionControls.AddAsync(nuevaSancion);
+                                await dbContext.SaveChangesAsync();
+
+                                accionesSupervision.Add(nuevaAccion);
                             }
-
-                            Kardex cefer = kardexList.LastOrDefault();
-
-                            AccionSupervision nuevaAccion = new AccionSupervision
+                            else
                             {
-                                IdEntidadExt = visita.ClavePes,
-                                ClavePes = visita.ClavePes.ToString(),
-                                Casfim = casfim ?? string.Empty,
-                                DenominacionEntidad = firstPersona.RazonSocial,
-                                NombreCortoEntidad = firstPersona.NombreCorto,
-                                IdSectorExt = firstPersona.SectorId,
-                                NombreSector = firstPersona.Sector,
-                                IdSubsectorExt = firstPersona.SubSectorId,
-                                NombreSubsector = firstPersona.SubSector,
-                                IdVpExt = firstPersona.VicepresidenciaId,
-                                NombreVp = firstPersona.Vicepresidencia,
-                                ClaveVp = GenerarClave(firstPersona.Vicepresidencia),
-                                IdDgExt = firstPersona.DireccionGeneralId,
-                                NombreDg = firstPersona.DireccionGeneral,
-                                ClaveDg = GenerarClave(firstPersona.DireccionGeneral),
-                                IdTipoAccion = visita.Tipo.Equals("Ordinaria") ? 1 : 2,
-                                CeferRegistro = cefer != null ? cefer.Calificacion : null,
-                                CeferPeriodo = cefer != null ? cefer.Periodo : null,
-                                FechaInicioPlan = visita.FechaInicio,
-                                FechaFinPlan = visita.FechaFin,
-                                FechaAlta = DateTime.Now,
-                                UsuarioAlta = "ID004478",
-                                IdAccion = visita.Id,
-                                Habilitado = true,
-                                Terminado = false,
-                                IdEstado = 1
-                            };
-
-                            await dbContext.AccionSupervisions.AddAsync(nuevaAccion);
-                            await dbContext.SaveChangesAsync();
-
-                            EjecucionAccion nuevaEjecucion = new EjecucionAccion
-                            {
-                                IdAccion = nuevaAccion.IdAccion
-                            };
-
-                            await dbContext.EjecucionAccions.AddAsync(nuevaEjecucion);
-                            await dbContext.SaveChangesAsync();
-
-                            ObservacionRecomendacion nuevaObservacion = new ObservacionRecomendacion
-                            {
-                                IdAccion = nuevaAccion.IdAccion
-                            };
-
-                            await dbContext.ObservacionRecomendacions.AddAsync(nuevaObservacion);
-                            await dbContext.SaveChangesAsync();
-
-                            AccionMedidaCorrectiva nuevaMedida = new AccionMedidaCorrectiva
-                            {
-                                IdAccion = nuevaAccion.IdAccion
-                            };
-
-                            await dbContext.AccionMedidaCorrectivas.AddAsync(nuevaMedida);
-                            await dbContext.SaveChangesAsync();
-
-                            SancionControl nuevaSancion = new SancionControl
-                            {
-                                IdAccion = nuevaAccion.IdAccion
-                            };
-
-                            await dbContext.SancionControls.AddAsync(nuevaSancion);
-                            await dbContext.SaveChangesAsync();
-
-                            accionesSupervision.Add(nuevaAccion);
+                                personasMoralesNotFound.Add(visita);
+                            }
                         }
                         else
                         {
-                            personasMoralesNotFound.Add(visita);
+                            Console.WriteLine("La visita ya había sido cargada");
                         }
 
                         index++;
                     }
-
                 }
 
                 await dbContext.Database.CommitTransactionAsync();
@@ -148,7 +157,7 @@ namespace LoadVIS
 
             try
             {
-                var response = await _httpClient.GetAsync("https://localhost:7149/api/visitas?periodo=2026");
+                var response = await _httpClient.GetAsync("https://localhost:7149/api/visitas?periodo=2025");
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -286,10 +295,13 @@ namespace LoadVIS
                 return string.Empty;
 
             // Palabras a omitir (solo cuando están en medio)
-            var palabrasAOmitir = new HashSet<string> { "DE", "Y", "E", "DEL", "LA", "LAS", "LOS", "EL" };
+            var palabrasAOmitir = new HashSet<string> { "DE", "Y", "E", "DEL", "LA", "LAS", "LOS", "EL", "CON" };
 
             // Dividir el texto por espacios
             var palabras = texto.Trim().Split(new[] { ' ', '-', '_', '.' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // Verificar si es una Vicepresidencia
+            bool esVicepresidencia = palabras.Length > 0 && palabras[0].ToUpper() == "VICEPRESIDENCIA";
 
             var clave = new List<string>();
             int totalPalabras = palabras.Length;
@@ -297,23 +309,92 @@ namespace LoadVIS
             for (int i = 0; i < totalPalabras; i++)
             {
                 var palabra = palabras[i].ToUpper();
+                var palabraOriginal = palabras[i];
+
+                // Si es Vicepresidencia, la primera letra siempre es 'V' y la segunda es 'P'
+                if (esVicepresidencia && i == 0)
+                {
+                    clave.Add("V");
+                    clave.Add("P");
+                    continue;
+                }
 
                 // Si es la última palabra, incluirla siempre
                 if (i == totalPalabras - 1)
                 {
-                    if (!string.IsNullOrEmpty(palabra))
-                        clave.Add(char.ToUpper(palabras[i][0]).ToString());
+                    if (!string.IsNullOrEmpty(palabraOriginal))
+                        clave.Add(char.ToUpper(palabraOriginal[0]).ToString());
                 }
                 // Si no es la última palabra, omitir si está en la lista de palabras a omitir
                 else if (!palabrasAOmitir.Contains(palabra))
                 {
-                    if (!string.IsNullOrEmpty(palabra))
-                        clave.Add(char.ToUpper(palabras[i][0]).ToString());
+                    if (!string.IsNullOrEmpty(palabraOriginal))
+                        clave.Add(char.ToUpper(palabraOriginal[0]).ToString());
                 }
             }
 
             return string.Concat(clave);
         }
+
+        static async Task<AreaResponse?> ObtenerAreaPorNombre(string nombreArea)
+        {
+            if (string.IsNullOrWhiteSpace(nombreArea))
+            {
+                Console.WriteLine("El nombre del área no puede estar vacío.");
+                return null;
+            }
+
+            // Codificar el nombre para la URL (reemplaza espacios con %20, etc.)
+            var nombreCodificado = Uri.EscapeDataString(nombreArea);
+            var url = $"https://pes-api-service-dev.cnbv.gob.mx/api/v1/areas?Nombre={nombreCodificado}";
+
+            try
+            {
+                // Este endpoint no requiere JWT, aseguramos que no haya headers de autorización heredados
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                // Si _httpClient ya tiene un Authorization header de llamadas anteriores, lo limpiamos para esta petición específica
+                request.Headers.Authorization = null;
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+                var areas = JsonSerializer.Deserialize<List<AreaResponse>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                // Retornar el primer elemento si la lista no es nula ni vacía
+                if (areas != null && areas.Any())
+                {
+                    var primerArea = areas.First();
+                    Console.WriteLine($"Área encontrada: Id={primerArea.Id}, Nombre={primerArea.Nombre}, IdPadre={primerArea.IdPadre}");
+                    return primerArea;
+                }
+
+                Console.WriteLine($"No se encontró ningún área con el nombre: '{nombreArea}'");
+                return null;
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"Error HTTP al obtener área por nombre '{nombreArea}': {ex.Message}");
+                if (ex.StatusCode.HasValue)
+                    Console.WriteLine($"  Código de estado: {ex.StatusCode.Value}");
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error inesperado al obtener área por nombre '{nombreArea}': {ex.Message}");
+                return null;
+            }
+        }
+    }
+
+    public class AreaResponse
+    {
+        public int Id { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public int IdPadre { get; set; }
     }
 
     public class ClaveDinamicaResponse
