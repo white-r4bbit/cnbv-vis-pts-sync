@@ -39,8 +39,14 @@ namespace LoadVIS
                                 var firstPersona = persona.First();
 
                                 string casfim = await ObtenerCasfim(visita.ClavePes, firstPersona.SubSectorId);
-                                var dgInfo = await ObtenerAreaPorNombre(firstPersona.DireccionGeneral.Trim());
-                                var vpInfo = await ObtenerAreaPorNombre(firstPersona.Vicepresidencia.Trim());
+
+                                if (visita.AreaId == 67000)
+                                {
+                                    visita.AreaId = 34000;
+                                }
+
+                                var dgInfo = await ObtenerAreaPorClave(visita.AreaId);
+                                var vpInfo = await ObtenerAreaPorClave(dgInfo.IdPadre);
 
                                 List<Kardex> kardexList = new List<Kardex>();
 
@@ -50,6 +56,10 @@ namespace LoadVIS
                                 }
 
                                 Kardex cefer = kardexList.LastOrDefault();
+
+                                if (!visita.Tipo.Equals("Ordinaria") && !visita.Tipo.Equals("Especial"))
+                                {
+                                }
 
                                 AccionSupervision nuevaAccion = new AccionSupervision
                                 {
@@ -63,11 +73,11 @@ namespace LoadVIS
                                     IdSubsectorExt = firstPersona.SubSectorId,
                                     NombreSubsector = firstPersona.SubSector,
                                     IdVpExt = vpInfo != null ? vpInfo.Id : 0,
-                                    NombreVp = firstPersona.Vicepresidencia,
-                                    ClaveVp = GenerarClave(firstPersona.Vicepresidencia),
+                                    NombreVp = vpInfo.Nombre,
+                                    ClaveVp = GenerarClave(vpInfo.Nombre),
                                     IdDgExt = dgInfo != null ? dgInfo.Id : 0,
-                                    NombreDg = firstPersona.DireccionGeneral,
-                                    ClaveDg = GenerarClave(firstPersona.DireccionGeneral),
+                                    NombreDg = dgInfo.Nombre,
+                                    ClaveDg = GenerarClave(dgInfo.Nombre),
                                     IdTipoAccion = visita.Tipo.Equals("Ordinaria") ? 1 : 2,
                                     CeferRegistro = cefer != null ? cefer.Calificacion : null,
                                     CeferPeriodo = cefer != null ? cefer.Periodo : null,
@@ -157,7 +167,7 @@ namespace LoadVIS
 
             try
             {
-                var response = await _httpClient.GetAsync("https://localhost:7149/api/visitas?periodo=2025");
+                var response = await _httpClient.GetAsync("https://localhost:7149/api/visitas?periodo=2026");
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -336,17 +346,17 @@ namespace LoadVIS
             return string.Concat(clave);
         }
 
-        static async Task<AreaResponse?> ObtenerAreaPorNombre(string nombreArea)
+        static async Task<AreaResponse?> ObtenerAreaPorClave(int idArea)
         {
-            if (string.IsNullOrWhiteSpace(nombreArea))
-            {
-                Console.WriteLine("El nombre del área no puede estar vacío.");
-                return null;
-            }
+            ////if (string.IsNullOrWhiteSpace(idArea))
+            ////{
+            ////    Console.WriteLine("El nombre del área no puede estar vacío.");
+            ////    return null;
+            ////}
 
             // Codificar el nombre para la URL (reemplaza espacios con %20, etc.)
-            var nombreCodificado = Uri.EscapeDataString(nombreArea);
-            var url = $"https://pes-api-service-dev.cnbv.gob.mx/api/v1/areas?Nombre={nombreCodificado}";
+            ////var areaCodificada = Uri.EscapeDataString(idArea);
+            var url = $"https://localhost:7001/api/v1/areas?Id={idArea}";
 
             try
             {
@@ -372,19 +382,19 @@ namespace LoadVIS
                     return primerArea;
                 }
 
-                Console.WriteLine($"No se encontró ningún área con el nombre: '{nombreArea}'");
+                Console.WriteLine($"No se encontró ningún área con el clave: '{idArea}'");
                 return null;
             }
             catch (HttpRequestException ex)
             {
-                Console.WriteLine($"Error HTTP al obtener área por nombre '{nombreArea}': {ex.Message}");
+                Console.WriteLine($"Error HTTP al obtener área por clave '{idArea}': {ex.Message}");
                 if (ex.StatusCode.HasValue)
                     Console.WriteLine($"  Código de estado: {ex.StatusCode.Value}");
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error inesperado al obtener área por nombre '{nombreArea}': {ex.Message}");
+                Console.WriteLine($"Error inesperado al obtener área por clave '{idArea}': {ex.Message}");
                 return null;
             }
         }
