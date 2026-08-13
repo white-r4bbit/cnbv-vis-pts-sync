@@ -20,6 +20,7 @@ namespace LoadVIS
                 var visitas = await ObtenerVisitas();
                 var loadedVisitas = dbContext.AccionSupervisions.ToList().Select(v => v.IdAccion);
                 var personasMoralesNotFound = new List<Visita>();
+                var tiposVisita = dbContext.TipoAccions.ToList();
 
                 if (visitas != null && visitas.Any())
                 {
@@ -57,8 +58,30 @@ namespace LoadVIS
 
                                 Kardex cefer = kardexList.LastOrDefault();
 
-                                if (!visita.Tipo.Equals("Ordinaria") && !visita.Tipo.Equals("Especial"))
+
+                                TipoAccion tipo;
+
+                                if (visita.Tipo.Equals("Visita Especial"))
                                 {
+                                    tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VIE"));
+                                }
+                                else
+                                {
+                                    if (visita.Tipo.Equals("Visita Ordinaria"))
+                                    {
+                                        tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VIO"));
+                                    }
+                                    else
+                                    {
+                                        if (visita.Tipo.Equals("Visita Reforzada Específica"))
+                                        {
+                                            tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VRE"));
+                                        }
+                                        else
+                                        {
+                                            tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VRENP"));
+                                        }
+                                    }
                                 }
 
                                 AccionSupervision nuevaAccion = new AccionSupervision
@@ -78,7 +101,7 @@ namespace LoadVIS
                                     IdDgExt = dgInfo != null ? dgInfo.Id : 0,
                                     NombreDg = dgInfo.Nombre,
                                     ClaveDg = GenerarClave(dgInfo.Nombre),
-                                    IdTipoAccion = visita.Tipo.Equals("Ordinaria") ? 1 : 2,
+                                    IdTipoAccion = tipo.IdTipo,
                                     CeferRegistro = cefer != null ? cefer.Calificacion : null,
                                     CeferPeriodo = cefer != null ? cefer.Periodo : null,
                                     FechaInicioPlan = visita.FechaInicio,
@@ -135,7 +158,73 @@ namespace LoadVIS
                         }
                         else
                         {
-                            Console.WriteLine("La visita ya había sido cargada");
+                            ////Console.WriteLine("La visita ya había sido cargada");
+                            var accion = dbContext.AccionSupervisions.First(a => a.IdAccion == visita.Id);
+
+                            var persona = await ObtenerPersonaMoral(visita.ClavePes, visita.IdSector);
+                            if (persona != null && persona.Any())
+                            {
+                                var firstPersona = persona.First();
+
+                                string casfim = await ObtenerCasfim(firstPersona.Id, visita.IdSector);
+
+                                //if (!string.IsNullOrEmpty(casfim))
+                                //{
+                                accion.Casfim = casfim;
+                                //}
+                            }
+
+                            ////Console.WriteLine("Se actualizará la información de los tipos de visita.");
+
+                            ////TipoAccion tipo;
+
+                            ////if (visita.Tipo.Equals("Visita Especial"))
+                            ////{
+                            ////    tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VIE"));
+                            ////    accion.IdTipoAccion = tipo.IdTipo;
+                            ////}
+                            ////else
+                            ////{
+                            ////    if (visita.Tipo.Equals("Visita Ordinaria"))
+                            ////    {
+                            ////        tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VIO"));
+                            ////        accion.IdTipoAccion = tipo.IdTipo;
+                            ////    }
+                            ////    else
+                            ////    {
+                            ////        if (visita.Tipo.Equals("Visita Reforzada Específica"))
+                            ////        {
+                            ////            tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VRE"));
+                            ////            accion.IdTipoAccion = tipo.IdTipo;
+                            ////        }
+                            ////        else
+                            ////        {
+                            ////            tipo = tiposVisita.First(t => t.ClaveSubtipo.Equals("VRENP"));
+                            ////            accion.IdTipoAccion = tipo.IdTipo;
+                            ////        }
+                            ////    }
+                            ////}
+
+                            ////var dgInfo = await ObtenerAreaPorClave(visita.AreaId);
+                            ////var vpInfo = await ObtenerAreaPorClave(dgInfo.IdPadre);
+
+                            ////accion.ClaveVp = GenerarClave(vpInfo.Nombre);
+                            ////accion.ClaveDg = GenerarClave(dgInfo.Nombre);
+
+                            ////List<Kardex> kardexList = new List<Kardex>();
+
+                            ////if (!string.IsNullOrEmpty(accion.Casfim))
+                            ////{
+                            ////    kardexList = await ObtenerKardex(accion.Casfim);
+                            ////}
+
+                            ////Kardex cefer = kardexList.LastOrDefault();
+
+                            ////accion.CeferRegistro = cefer != null ? cefer.Calificacion : null;
+                            ////accion.CeferPeriodo = cefer != null ? cefer.Periodo : null;
+
+                            dbContext.AccionSupervisions.Update(accion);
+                            dbContext.SaveChanges();
                         }
 
                         index++;
@@ -159,7 +248,7 @@ namespace LoadVIS
             var token = Environment.GetEnvironmentVariable("AZURE_TOKEN");
 
             _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            //_httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             _httpClient.DefaultRequestHeaders.Add("X-Ordenamiento-Campo", "Id");
             _httpClient.DefaultRequestHeaders.Add("X-Ordenamiento-Tipo", "ASC");
             _httpClient.DefaultRequestHeaders.Add("X-Pagina-Numero", "1");
@@ -231,32 +320,34 @@ namespace LoadVIS
                 // Obtener el valor del primer resultado (si existe)
                 var casfim = resultados?.FirstOrDefault()?.Valor ?? string.Empty;
 
-                // Validar que el valor no sea nulo o vacío
-                if (string.IsNullOrEmpty(casfim))
-                {
-                    Console.WriteLine($"CASFIM vacío para personaMoralId={personaMoralId}, subSectorId={subSectorId}");
-                    return string.Empty;
-                }
+                //// Validar que el valor no sea nulo o vacío
+                //if (string.IsNullOrEmpty(casfim))
+                //{
+                //    Console.WriteLine($"CASFIM vacío para personaMoralId={personaMoralId}, subSectorId={subSectorId}");
+                //    return string.Empty;
+                //}
 
-                // Validar que solo contenga números
-                if (!casfim.All(char.IsDigit))
-                {
-                    Console.WriteLine($"CASFIM inválido (contiene caracteres no numéricos): '{casfim}' para personaMoralId={personaMoralId}");
-                    return string.Empty;
-                }
+                //// Validar que solo contenga números
+                //if (!casfim.All(char.IsDigit))
+                //{
+                //    Console.WriteLine($"CASFIM inválido (contiene caracteres no numéricos): '{casfim}' para personaMoralId={personaMoralId}");
+                //    return string.Empty;
+                //}
 
-                // Validar que no sea un número negativo o cero (opcional)
-                if (int.TryParse(casfim, out int casfimNumber) && casfimNumber <= 0)
-                {
-                    Console.WriteLine($"CASFIM inválido (valor <= 0): '{casfim}' para personaMoralId={personaMoralId}");
-                    return string.Empty;
-                }
+                //// Validar que no sea un número negativo o cero (opcional)
+                //if (int.TryParse(casfim, out int casfimNumber) && casfimNumber <= 0)
+                //{
+                //    Console.WriteLine($"CASFIM inválido (valor <= 0): '{casfim}' para personaMoralId={personaMoralId}");
+                //    return string.Empty;
+                //}
 
-                // Formatear a 6 dígitos con ceros a la izquierda
-                string casfimFormateado = casfimNumber.ToString("D6");
-                Console.WriteLine($"CASFIM válido: '{casfim}' -> '{casfimFormateado}'");
+                //// Formatear a 6 dígitos con ceros a la izquierda
+                //string casfimFormateado = casfimNumber.ToString("D6");
+                //Console.WriteLine($"CASFIM válido: '{casfim}' -> '{casfimFormateado}'");
 
-                return casfimFormateado;
+                ////return casfimFormateado;
+                ///
+                return casfim;
             }
             catch (HttpRequestException ex)
             {
@@ -305,7 +396,7 @@ namespace LoadVIS
                 return string.Empty;
 
             // Palabras a omitir (solo cuando están en medio)
-            var palabrasAOmitir = new HashSet<string> { "DE", "Y", "E", "DEL", "LA", "LAS", "LOS", "EL", "CON" };
+            var palabrasAOmitir = new HashSet<string> { "DE", "Y", "E", "DEL", "LA", "LAS", "LOS", "EL", "CON", "EN" };
 
             // Dividir el texto por espacios
             var palabras = texto.Trim().Split(new[] { ' ', '-', '_', '.' }, StringSplitOptions.RemoveEmptyEntries);
@@ -348,6 +439,8 @@ namespace LoadVIS
 
         static async Task<AreaResponse?> ObtenerAreaPorClave(int idArea)
         {
+            if (idArea == 67000)
+                idArea = 34000;
             ////if (string.IsNullOrWhiteSpace(idArea))
             ////{
             ////    Console.WriteLine("El nombre del área no puede estar vacío.");
